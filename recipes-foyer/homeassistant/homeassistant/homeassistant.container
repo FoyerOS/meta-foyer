@@ -1,0 +1,18 @@
+[Unit]
+Description=Home Assistant
+After=homeassistant-image-import.service
+Requires=homeassistant-image-import.service
+
+[Container]
+Image=localhost/homeassistant:2026.7.2
+ContainerName=homeassistant
+Network=host
+Volume=/var/lib/homeassistant:/config
+Environment=TZ=UTC
+PodmanArgs=--privileged
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

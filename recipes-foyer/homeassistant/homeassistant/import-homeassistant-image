@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+# /var/tmp is tmpfs (RAM-backed) on this image; podman's default load scratch
+# dir lives there and is far too small for a ~600MB image. Use real disk instead.
+mkdir -p /var/lib/foyer/tmp
+export TMPDIR=/var/lib/foyer/tmp
+
+podman load -i /var/lib/foyer/containers/homeassistant.tar
+rm -f /var/lib/foyer/containers/homeassistant.tar
+rm -rf /var/lib/foyer/tmp
+mkdir -p /var/lib/foyer
+touch /var/lib/foyer/.homeassistant-imported
