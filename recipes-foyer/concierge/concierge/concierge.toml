@@ -1,0 +1,13 @@
+# Foyer concierge daemon configuration.
+
+# Unix socket for the CLI; access is gated by file permissions (0660), not sessions.
+socket_path = "/run/foyer/concierge.sock"
+
+# TCP listener for the WebGUI/API. Set `listen = false` for unix-socket only.
+listen = "0.0.0.0:8080"
+
+# Members of this group may log in over TCP.
+admin_group = "foyer-admin"
+
+# PAM service name; matches /etc/pam.d/foyer-concierge.
+pam_service = "foyer-concierge"

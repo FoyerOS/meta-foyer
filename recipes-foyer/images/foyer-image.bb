@@ -14,6 +14,8 @@ IMAGE_INSTALL = "\
     fuse-overlayfs \
     slirp4netns \
     homeassistant \
+    rust \
+    concierge \
     "
 # Decompression of images needs space. Give it 8GB to have extra headroom
 # TODO: Slim it down
