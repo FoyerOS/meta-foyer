@@ -1,58 +1,29 @@
-SUMMARY = "Home Assistant, baked in at build time as a podman Quadlet container"
+SUMMARY = "Home Assistant, run as a podman Quadlet container"
+DESCRIPTION = "Ships only the Quadlet unit. The container image itself is \
+baked into the seed slot by foyer-container-seed and loaded into podman by \
+foyer-seed-import, so an A/B update replaces the image alongside the OS while \
+Home Assistant's own data stays on the data partition."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-DEPENDS = "skopeo-native"
-RDEPENDS:${PN} = "podman"
-
 INHIBIT_DEFAULT_DEPS = "1"
 
+# Must match the version baked in via FOYER_SEED_IMAGES in
+# foyer-container-seed_1.0.bb — the Quadlet references the loaded image by tag.
 HOMEASSISTANT_VERSION = "2026.7.2"
-HOMEASSISTANT_IMAGE = "docker://ghcr.io/home-assistant/home-assistant:${HOMEASSISTANT_VERSION}"
 
-SRC_URI = "\
-    file://homeassistant.container \
-    file://homeassistant-image-import.service \
-    file://import-homeassistant-image \
-    "
+SRC_URI = "file://homeassistant.container"
 
 S = "${UNPACKDIR}"
 
-inherit systemd
-
-do_pull_image[network] = "1"
-do_pull_image[nostamp] = "1"
-do_pull_image[depends] = "skopeo-native:do_populate_sysroot"
-addtask pull_image after do_unpack before do_install
-
-do_pull_image() {
-    skopeo copy --override-os linux --override-arch amd64 \
-        ${HOMEASSISTANT_IMAGE} \
-        oci-archive:${WORKDIR}/homeassistant.tar:homeassistant:${HOMEASSISTANT_VERSION}
-}
+# The image import and the /var/lib/homeassistant bind mount both have to be in
+# place before the container starts.
+RDEPENDS:${PN} = "podman foyer-seed-import foyer-fs-layout"
 
 do_install() {
     install -d ${D}${sysconfdir}/containers/systemd
-    install -m 0644 ${UNPACKDIR}/homeassistant.container ${D}${sysconfdir}/containers/systemd/homeassistant.container
-
-    install -d ${D}${systemd_system_unitdir}
-    install -m 0644 ${UNPACKDIR}/homeassistant-image-import.service ${D}${systemd_system_unitdir}/homeassistant-image-import.service
-
-    install -d ${D}${libexecdir}/foyer
-    install -m 0755 ${UNPACKDIR}/import-homeassistant-image ${D}${libexecdir}/foyer/import-homeassistant-image
-
-    install -d ${D}/var/lib/foyer/containers
-    install -m 0644 ${WORKDIR}/homeassistant.tar ${D}/var/lib/foyer/containers/homeassistant.tar
-
-    install -d ${D}/var/lib/homeassistant
+    install -m 0644 ${UNPACKDIR}/homeassistant.container \
+        ${D}${sysconfdir}/containers/systemd/homeassistant.container
 }
 
-FILES:${PN} += "\
-    ${sysconfdir}/containers/systemd/homeassistant.container \
-    ${libexecdir}/foyer/import-homeassistant-image \
-    /var/lib/foyer/containers/homeassistant.tar \
-    /var/lib/homeassistant \
-    "
-
-SYSTEMD_SERVICE:${PN} = "homeassistant-image-import.service"
-SYSTEMD_AUTO_ENABLE:${PN} = "enable"
+FILES:${PN} += "${sysconfdir}/containers/systemd/homeassistant.container"

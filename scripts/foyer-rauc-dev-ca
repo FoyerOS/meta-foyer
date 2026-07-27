@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# Generate a development CA for signing Foyer RAUC bundles.
+#
+# No key material is committed to meta-foyer: a private key in a public repo
+# would let anyone sign an update your devices accept. Run this once, keep the
+# output out of version control, and use a real PKI for production.
+#
+# Usage:  foyer-rauc-dev-ca [output-dir]
+#
+# Default output dir is $BUILDDIR/foyer-pki, which is where the
+# rauc-conf.bbappend and foyer-bundle.bb look (FOYER_RAUC_PKI_DIR). Both pick
+# the keys up automatically on the next build.
+
+set -eu
+
+PKI_DIR="${1:-${BUILDDIR:-$PWD}/foyer-pki}"
+DAYS="${FOYER_CA_DAYS:-3650}"
+
+if [ -e "$PKI_DIR/ca.cert.pem" ]; then
+    echo "foyer-rauc-dev-ca: $PKI_DIR/ca.cert.pem already exists, refusing to overwrite."
+    echo "Delete the directory first if you really want a new CA — note that"
+    echo "devices running an image built with the old CA will reject bundles"
+    echo "signed by the new one."
+    exit 1
+fi
+
+mkdir -p "$PKI_DIR"
+chmod 0700 "$PKI_DIR"
+
+echo "foyer-rauc-dev-ca: generating a development CA in $PKI_DIR"
+
+openssl req -newkey rsa:4096 -nodes -keyout "$PKI_DIR/ca.key.pem" \
+    -x509 -days "$DAYS" -out "$PKI_DIR/ca.cert.pem" \
+    -subj "/O=Foyer OS/CN=Foyer OS Development CA" \
+    -addext "basicConstraints=critical,CA:TRUE" \
+    -addext "keyUsage=critical,keyCertSign,cRLSign,digitalSignature"
+
+chmod 0600 "$PKI_DIR/ca.key.pem"
+chmod 0644 "$PKI_DIR/ca.cert.pem"
+
+cat <<EOF
+
+Done.
+
+  certificate : $PKI_DIR/ca.cert.pem   (baked into the image as /usr/lib/rauc/ca.cert.pem)
+  private key : $PKI_DIR/ca.key.pem    (signs bundles; keep it out of git)
+
+Rebuild the image so the certificate lands in the keyring:
+
+  kas build kas/base.yml
+
+Then build a signable bundle:
+
+  kas shell kas/base.yml -c "bitbake foyer-bundle"
+
+If your build directory is not the default, point the build at this directory
+by setting FOYER_RAUC_PKI_DIR in conf/local.conf:
+
+  FOYER_RAUC_PKI_DIR = "$PKI_DIR"
+EOF

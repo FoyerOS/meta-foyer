@@ -1,0 +1,16 @@
+[Unit]
+Description=Confirm this boot to RAUC
+Documentation=man:rauc(1)
+# Runs once the system is fully up. Until this fires, the TRY flag grub set for
+# this slot is still standing, so an unbootable update falls back to the other
+# slot on the next power cycle. This unit is what makes the rollback stop.
+After=multi-user.target foyer-seed-import.service
+ConditionKernelCommandLine=rauc.slot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/rauc status mark-good
+
+[Install]
+WantedBy=multi-user.target

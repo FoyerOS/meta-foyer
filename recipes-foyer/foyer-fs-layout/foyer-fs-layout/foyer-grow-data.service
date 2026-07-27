@@ -1,0 +1,15 @@
+[Unit]
+Description=Grow the Foyer data partition to fill the disk
+Documentation=man:sfdisk(8) man:resize2fs(8)
+DefaultDependencies=no
+After=systemd-udev-trigger.service
+Before=data.mount local-fs.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/foyer/foyer-grow-data
+# Never block boot on a resize failure: a data partition at its shipped size
+# still works, it is just small.
+SuccessExitStatus=0

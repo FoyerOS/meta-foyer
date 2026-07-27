@@ -1,0 +1,94 @@
+#!/bin/sh
+#
+# Expand the foyer-data partition, and the filesystem on it, to fill whatever
+# disk the image was written to. The .wic ships foyer-data at a fixed size so
+# that one image can be flashed to an 8GB SD card or a 1TB SSD; this claims the
+# remainder.
+#
+# Runs before data.mount, while the filesystem is still unmounted.
+#
+# Two things this script is careful about, both learned the hard way:
+#
+#   * It does nothing at all unless there is real free space to claim. Rewriting
+#     the GPT makes the kernel emit a "change" uevent for *every* partition on
+#     the disk; udev then tears down and recreates the by-label/by-partlabel
+#     symlinks, so the corresponding systemd .device units briefly go
+#     plugged -> dead. Mount units carry an implicit Requires= on their device
+#     unit, so systemd stops them — /data and /efi were being unmounted a few
+#     seconds into every boot because of this.
+#
+#   * When it does change the table, it drains the udev queue before returning.
+#     This service is ordered Before=data.mount, so settling here guarantees the
+#     uevent storm is over before anything mounts.
+#
+# Deliberately never fails the boot — an undersized data partition is a
+# degraded system, not a broken one.
+
+set -u
+
+# Leave the partition alone unless at least this much space would be gained.
+# Also covers the ~33 sectors the GPT secondary header needs at the end of disk.
+MIN_GROW_SECTORS=2048   # 1 MiB
+
+log() {
+    echo "foyer-grow-data: $*"
+}
+
+DEV=$(blkid -L foyer-data 2>/dev/null || true)
+if [ -z "$DEV" ]; then
+    log "no partition labelled 'foyer-data' found, nothing to do"
+    exit 0
+fi
+
+KNAME=$(basename "$DEV")
+if [ ! -r "/sys/class/block/$KNAME/partition" ]; then
+    log "$DEV is not a partition, refusing to resize"
+    exit 0
+fi
+PARTNUM=$(cat "/sys/class/block/$KNAME/partition")
+
+PKNAME=$(lsblk -no PKNAME "$DEV" 2>/dev/null | head -n1)
+if [ -z "$PKNAME" ]; then
+    log "cannot determine the disk holding $DEV"
+    exit 0
+fi
+DISK="/dev/$PKNAME"
+
+# How much room is left after the end of this partition?
+DISK_SECTORS=$(blockdev --getsz "$DISK" 2>/dev/null || echo 0)
+PART_START=$(cat "/sys/class/block/$KNAME/start" 2>/dev/null || echo 0)
+PART_SECTORS=$(cat "/sys/class/block/$KNAME/size" 2>/dev/null || echo 0)
+SLACK=$(( DISK_SECTORS - PART_START - PART_SECTORS ))
+
+if [ "$DISK_SECTORS" -eq 0 ] || [ "$SLACK" -lt "$MIN_GROW_SECTORS" ]; then
+    log "$DEV already fills $DISK (${SLACK} spare sectors), nothing to do"
+    exit 0
+fi
+
+log "growing $DEV (partition $PARTNUM of $DISK), ${SLACK} sectors available"
+
+# A smaller image written to a larger disk leaves the GPT backup header
+# stranded mid-disk; sfdisk will not extend past it until it is moved.
+sfdisk --relocate gpt-bak-std "$DISK" >/dev/null 2>&1 \
+    || log "GPT backup header relocation skipped"
+
+# ",+" means: keep the start, extend the size over all remaining free space.
+if echo ',+' | sfdisk --no-reread --force -N "$PARTNUM" "$DISK" >/dev/null 2>&1; then
+    partx -u "$DISK" >/dev/null 2>&1 || true
+
+    # resize2fs refuses to touch a filesystem that has not been checked.
+    e2fsck -fp "$DEV" >/dev/null 2>&1 || true
+    if resize2fs "$DEV" >/dev/null 2>&1; then
+        log "grown to $(blockdev --getsize64 "$DEV" 2>/dev/null || echo '?') bytes"
+    else
+        log "partition grown but resize2fs made no change"
+    fi
+else
+    log "could not extend the partition, leaving it as it is"
+fi
+
+# Drain the uevents our partition table rewrite just generated, so the .device
+# units have settled before data.mount and efi.mount are started.
+udevadm settle --timeout=30 >/dev/null 2>&1 || true
+
+exit 0

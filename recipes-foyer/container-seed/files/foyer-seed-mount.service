@@ -1,0 +1,16 @@
+[Unit]
+Description=Mount the container seed slot matching the booted root slot
+Documentation=man:mount(8)
+After=local-fs.target
+Before=foyer-seed-import.service
+# Only meaningful once we know which slot we booted.
+ConditionKernelCommandLine=rauc.slot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/foyer/foyer-seed-mount
+ExecStop=/bin/umount /usr/share/foyer/seed
+
+[Install]
+WantedBy=multi-user.target

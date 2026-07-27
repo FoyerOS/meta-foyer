@@ -1,0 +1,85 @@
+#!/bin/sh
+#
+# Foyer variant of oe-core's meta/files/overlayfs-etc-preinit.sh.in.
+#
+# This runs as PID 1, before systemd and therefore before udev, so
+# /dev/disk/by-label and /dev/disk/by-partlabel do not exist yet. The stock
+# template mounts OVERLAYFS_ETC_DEVICE verbatim, which forces a hardcoded node
+# (/dev/sda6, /dev/mmcblk0p6, ...) and breaks the moment the image moves
+# between QEMU (vda), bare metal (sda/nvme0n1) and a Raspberry Pi (mmcblk0).
+#
+# Instead we resolve the partition with `blkid -L`, which reads the filesystem
+# label straight out of the superblock and needs no udev. OVERLAYFS_ETC_DEVICE
+# is therefore written as "LABEL=<fslabel>" in the machine conf.
+#
+# NOTE: overlayfs-etc.bbclass renders this file with Python str.format() against
+# a fixed key set, so this script must contain NO literal braces at all — every
+# braced name below is one of the class's substitutions. That rules out shell
+# prefix-stripping expansions; use sed instead.
+
+echo "PREINIT: Start"
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+if {CREATE_MOUNT_DIRS}; then
+    mount -o remount,rw /
+
+    mkdir -p /proc
+    mkdir -p /sys
+    mkdir -p /run
+    mkdir -p /var/run
+    mkdir -p {OVERLAYFS_ETC_MOUNT_POINT}
+fi
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+[ -z "$CONSOLE" ] && CONSOLE="/dev/console"
+
+BASE_OVERLAY_ETC_DIR={OVERLAYFS_ETC_MOUNT_POINT}/overlay-etc
+UPPER_DIR=$BASE_OVERLAY_ETC_DIR/upper
+WORK_DIR=$BASE_OVERLAY_ETC_DIR/work
+LOWER_DIR=$BASE_OVERLAY_ETC_DIR/lower
+
+# Resolve "LABEL=foo" via blkid; anything else is used as-is so a plain device
+# node still works.
+CONFIG_DEV="{OVERLAYFS_ETC_DEVICE}"
+case "$CONFIG_DEV" in
+    LABEL=*)
+        CONFIG_LABEL=$(echo "$CONFIG_DEV" | sed 's/^LABEL=//')
+        CONFIG_DEV=$(blkid -L "$CONFIG_LABEL" 2>/dev/null)
+        if [ -z "$CONFIG_DEV" ]; then
+            echo "PREINIT: no filesystem labelled '$CONFIG_LABEL' found"
+        fi
+        ;;
+esac
+
+if [ -n "$CONFIG_DEV" ] && mount -n -t {OVERLAYFS_ETC_FSTYPE} \
+    -o {OVERLAYFS_ETC_MOUNT_OPTIONS} \
+    "$CONFIG_DEV" {OVERLAYFS_ETC_MOUNT_POINT}
+then
+    mkdir -p $UPPER_DIR
+    mkdir -p $WORK_DIR
+
+    if {OVERLAYFS_ETC_EXPOSE_LOWER}; then
+        mkdir -p $LOWER_DIR
+
+        # provide read-only access to original /etc content
+        mount -o bind,ro /etc $LOWER_DIR
+    fi
+
+    mount -n -t overlay \
+        -o upperdir=$UPPER_DIR \
+        -o lowerdir=/etc \
+        -o workdir=$WORK_DIR \
+        -o index=off,xino=off,redirect_dir=off,metacopy=off \
+        $UPPER_DIR /etc || \
+            echo "PREINIT: Mounting etc-overlay failed!"
+else
+    echo "PREINIT: Mounting config partition on {OVERLAYFS_ETC_MOUNT_POINT} failed!"
+fi
+
+umount /sys
+umount /proc
+
+echo "PREINIT: done; starting </sbin/init>"
+exec {SBIN_INIT_NAME}

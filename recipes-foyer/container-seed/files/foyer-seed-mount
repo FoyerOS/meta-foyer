@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# Mount the seed partition belonging to the root slot we booted from.
+#
+# This cannot be a plain .mount unit: a mount unit's name is fixed by its mount
+# point, but the device behind /usr/share/foyer/seed differs per slot (seedA or
+# seedB). grub puts rauc.slot=<A|B> on the kernel command line; that is the
+# same value RAUC itself uses to identify the booted slot.
+
+set -u
+
+MOUNTPOINT=/usr/share/foyer/seed
+
+log() {
+    echo "foyer-seed-mount: $*"
+}
+
+SLOT=""
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+        rauc.slot=*)
+            SLOT=$(echo "$arg" | sed 's/^rauc.slot=//')
+            ;;
+    esac
+done
+
+if [ -z "$SLOT" ]; then
+    log "no rauc.slot= on the kernel command line, cannot pick a seed slot"
+    exit 1
+fi
+
+DEV=$(blkid -L "seed$SLOT" 2>/dev/null || true)
+if [ -z "$DEV" ]; then
+    log "no partition labelled 'seed$SLOT' found"
+    exit 1
+fi
+
+if mountpoint -q "$MOUNTPOINT"; then
+    log "$MOUNTPOINT already mounted"
+    exit 0
+fi
+
+log "mounting $DEV (slot $SLOT) read-only at $MOUNTPOINT"
+exec mount -o ro "$DEV" "$MOUNTPOINT"

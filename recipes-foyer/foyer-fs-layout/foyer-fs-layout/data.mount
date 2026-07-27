@@ -1,0 +1,24 @@
+[Unit]
+Description=Foyer data partition
+Documentation=man:systemd.mount(5)
+# Grow to fill the disk before anything mounts it. Resizing the partition
+# table is only safe while the filesystem is still unmounted.
+After=foyer-grow-data.service
+Requires=foyer-grow-data.service
+# Required, not optional: this is what systemd-fstab-generator emits for every
+# local-fs entry. Without it the mount is established *after* local-fs.target
+# has already been reached, and systemd stops it again as the boot moves past
+# sysinit.target (observed: mounted at 10.9s, unmounted at 12.8s alongside
+# systemd-update-done.service).
+Before=local-fs.target
+
+[Mount]
+# By filesystem label, never a device node: the same image runs on vda, sda,
+# nvme0n1p7 and mmcblk0p7.
+What=/dev/disk/by-label/foyer-data
+Where=/data
+Type=ext4
+Options=noatime
+
+[Install]
+WantedBy=local-fs.target

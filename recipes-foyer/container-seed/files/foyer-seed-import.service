@@ -1,0 +1,14 @@
+[Unit]
+Description=Import baked-in container images into podman storage
+Documentation=man:podman-load(1)
+After=foyer-seed-mount.service var-lib-containers.mount var-lib-foyer.mount
+Requires=foyer-seed-mount.service
+RequiresMountsFor=/var/lib/containers /var/lib/foyer
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/foyer/foyer-seed-import
+
+[Install]
+WantedBy=multi-user.target

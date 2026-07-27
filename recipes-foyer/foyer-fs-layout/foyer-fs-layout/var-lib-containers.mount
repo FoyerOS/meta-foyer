@@ -1,0 +1,31 @@
+[Unit]
+Description=Podman storage on the Foyer data partition
+Documentation=man:systemd.mount(5)
+# DefaultDependencies=no is load-bearing, not tidying. Mount units otherwise
+# get an implicit Before=local-fs.target; because this one is ordered after
+# systemd-tmpfiles-setup.service (which itself runs After=local-fs.target),
+# that closes an ordering cycle, and systemd resolves it by deleting *this*
+# unit's start job — the bind mount then silently never happens:
+#   local-fs.target: Found ordering cycle: var-lib-containers.mount/start
+#   after systemd-tmpfiles-setup.service/start after local-fs.target/start
+# Nothing needs this mount in order to reach local-fs.target, so dropping it
+# out of that ordering is also the honest description of its role.
+DefaultDependencies=no
+Requires=data.mount
+After=data.mount
+# systemd-tmpfiles-setup creates /data/containers, which cannot exist until the
+# data partition is mounted.
+Requires=systemd-tmpfiles-setup.service
+After=systemd-tmpfiles-setup.service
+RequiresMountsFor=/data
+Conflicts=umount.target
+Before=umount.target
+
+[Mount]
+What=/data/containers
+Where=/var/lib/containers
+Type=none
+Options=bind
+
+[Install]
+WantedBy=multi-user.target
