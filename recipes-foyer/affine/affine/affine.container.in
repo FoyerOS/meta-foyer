@@ -1,0 +1,26 @@
+[Unit]
+Description=AFFiNE
+After=affine-migration.service foyer-redis.service
+Requires=affine-migration.service foyer-redis.service
+# /var/lib/affine is a bind mount from the data partition, and
+# /var/lib/foyer/secrets/pg-affine.env is written by foyer-pg-provision;
+# starting before either lands would give the container an empty storage
+# dir or no DATABASE_URL at all.
+RequiresMountsFor=/var/lib/affine /var/lib/foyer
+
+[Container]
+Image=localhost/affine:@AFFINE_VERSION@
+ContainerName=affine
+Network=foyer.network
+NetworkAlias=affine
+PublishPort=3010:3010
+Volume=/var/lib/affine/storage:/root/.affine/storage
+Volume=/var/lib/affine/config:/root/.affine/config
+EnvironmentFile=/var/lib/foyer/secrets/pg-affine.env
+Environment=REDIS_SERVER_HOST=foyer-redis REDIS_SERVER_DATABASE=1 AFFINE_INDEXER_ENABLED=false
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

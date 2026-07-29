@@ -1,0 +1,33 @@
+[Unit]
+Description=Shared PostgreSQL for Foyer app containers
+After=foyer-seed-import.service
+Requires=foyer-seed-import.service
+# /var/lib/postgres is a bind mount from the data partition, and
+# /var/lib/foyer is where the generated superuser password lives; starting
+# before either lands would either lose data across a reboot or fail to find
+# the secret ExecStartPre just wrote.
+RequiresMountsFor=/var/lib/postgres /var/lib/foyer
+
+[Container]
+Image=localhost/foyer-postgres:pg16
+ContainerName=foyer-postgres
+Network=foyer.network
+NetworkAlias=foyer-postgres
+# The image entrypoint runs as root and chowns $PGDATA itself on first start,
+# so a root-owned empty bind-mount target (see foyer.conf's tmpfiles entry) is
+# correct — do not pre-chown /data/postgres.
+Volume=/var/lib/postgres:/var/lib/postgresql/data
+Environment=POSTGRES_USER=postgres POSTGRES_DB=postgres POSTGRES_INITDB_ARGS=--data-checksums
+Environment=POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+EnvironmentFile=/var/lib/foyer/secrets/postgres.env
+HealthCmd=pg_isready -U postgres
+HealthInterval=10s
+HealthRetries=5
+Notify=healthy
+
+[Service]
+ExecStartPre=/usr/libexec/foyer/foyer-pg-secret
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

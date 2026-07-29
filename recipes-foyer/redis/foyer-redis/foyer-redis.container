@@ -1,0 +1,29 @@
+[Unit]
+Description=Shared Redis for Foyer app containers
+After=foyer-seed-import.service
+Requires=foyer-seed-import.service
+# /var/lib/redis is a bind mount from the data partition; starting before it
+# lands would give the container an empty, unpersisted data dir.
+RequiresMountsFor=/var/lib/redis
+
+[Container]
+Image=localhost/foyer-redis:7-alpine
+ContainerName=foyer-redis
+Network=foyer.network
+NetworkAlias=foyer-redis
+Volume=/var/lib/redis:/data
+HealthCmd=redis-cli ping
+HealthInterval=10s
+HealthRetries=5
+Notify=healthy
+
+# Redis db-index allocation (one shared instance, many apps by db index):
+#   0 - reserved, do not use
+#   1 - AFFiNE
+# Record the next app's index here when it is added.
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

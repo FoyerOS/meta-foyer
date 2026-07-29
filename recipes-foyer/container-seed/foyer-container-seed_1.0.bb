@@ -14,6 +14,9 @@ INHIBIT_DEFAULT_DEPS = "1"
 # container here is the whole job — the import side is generic.
 FOYER_SEED_IMAGES ?= "\
     homeassistant:2026.7.2:docker://ghcr.io/home-assistant/home-assistant \
+    affine:0.27.3:docker://ghcr.io/toeverything/affine \
+    foyer-postgres:pg16:docker://docker.io/pgvector/pgvector \
+    foyer-redis:7-alpine:docker://docker.io/library/redis \
     "
 
 # skopeo needs the target architecture, not the build host's.

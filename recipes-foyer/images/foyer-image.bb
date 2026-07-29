@@ -19,6 +19,10 @@ IMAGE_INSTALL = "\
     fuse-overlayfs \
     slirp4netns \
     homeassistant \
+    foyer-container-net \
+    foyer-postgres \
+    foyer-redis \
+    affine \
     rust \
     concierge \
     foyer-fs-layout \

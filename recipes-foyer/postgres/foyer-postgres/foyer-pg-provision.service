@@ -1,0 +1,13 @@
+[Unit]
+Description=Provision per-app PostgreSQL roles and databases
+Documentation=man:psql(1)
+After=foyer-postgres.service
+Requires=foyer-postgres.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/foyer/foyer-pg-provision
+
+[Install]
+WantedBy=multi-user.target

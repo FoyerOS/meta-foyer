@@ -1,0 +1,25 @@
+[Unit]
+Description=AFFiNE database migration (self-host-predeploy)
+After=foyer-pg-provision.service foyer-redis.service
+Requires=foyer-pg-provision.service foyer-redis.service
+# Same reasoning as affine.container: the DATABASE_URL secret and the
+# storage/config bind mounts both have to exist before this runs.
+RequiresMountsFor=/var/lib/affine /var/lib/foyer
+
+[Container]
+Image=localhost/affine:@AFFINE_VERSION@
+ContainerName=affine-migration
+Network=foyer.network
+NetworkAlias=affine-migration
+Volume=/var/lib/affine/storage:/root/.affine/storage
+Volume=/var/lib/affine/config:/root/.affine/config
+EnvironmentFile=/var/lib/foyer/secrets/pg-affine.env
+Environment=REDIS_SERVER_HOST=foyer-redis REDIS_SERVER_DATABASE=1 AFFINE_INDEXER_ENABLED=false
+Exec=sh -c 'node ./scripts/self-host-predeploy.js'
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
