@@ -14,8 +14,9 @@ LIC_FILES_CHKSUM = "file://LICENSE-MIT;md5=d0446e2f7f0432333446c348800d24fa"
 
 # pam-client -> pam-sys links libpam and generates its bindings with bindgen at
 # build time, so clang has to be pointed at the target sysroot rather than the
-# build host's /usr/include.
-DEPENDS += "libpam clang-native"
+# build host's /usr/include. nodejs-native builds the WebGUI (see do_compile:prepend
+# below) before cargo embeds it via the `webgui` feature.
+DEPENDS += "libpam clang-native nodejs-native"
 
 # cargo_bin (meta-rust-bin) builds with debug info but, unlike oe-core's
 # rust-common, sets no --remap-path-prefix, so WORKDIR paths (crate sources
@@ -27,6 +28,18 @@ BINDGEN_EXTRA_CLANG_ARGS = "${HOST_CC_ARCH}${TOOLCHAIN_OPTIONS} --target=${TARGE
 export BINDGEN_EXTRA_CLANG_ARGS
 
 do_compile[network] = "1"
+
+# webgui/dist is gitignored upstream (not reproducible/hermetic to commit a
+# build artifact), so it has to be built here before cargo_bin_do_compile
+# runs `cargo build --features ${CARGO_FEATURES}` and embeds it via
+# rust-embed. Runs inside do_compile, so it shares the network access
+# already granted above for cargo's own crates.io fetches.
+export npm_config_cache = "${WORKDIR}/npm-cache"
+do_compile:prepend() {
+    ( cd ${S}/webgui && npm ci && npm run build )
+}
+
+CARGO_FEATURES = "webgui"
 
 # The daemon rejects logins from users outside this group, and errors out if the
 # group is missing entirely. Membership is left to the operator.
