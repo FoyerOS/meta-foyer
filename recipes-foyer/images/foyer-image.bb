@@ -25,6 +25,7 @@ IMAGE_INSTALL = "\
     affine \
     rust \
     concierge \
+    haproxy \
     foyer-fs-layout \
     foyer-seed-import \
     foyer-boot-confirm \
