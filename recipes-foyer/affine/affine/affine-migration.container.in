@@ -1,7 +1,7 @@
 [Unit]
 Description=AFFiNE database migration (self-host-predeploy)
-After=foyer-pg-provision.service foyer-redis.service
-Requires=foyer-pg-provision.service foyer-redis.service
+After=foyer-pg-provision.service foyer-redis.service foyer-hw-preflight.service
+Requires=foyer-pg-provision.service foyer-redis.service foyer-hw-preflight.service
 # Same reasoning as affine.container: the DATABASE_URL secret and the
 # storage/config bind mounts both have to exist before this runs.
 RequiresMountsFor=/var/lib/affine /var/lib/foyer

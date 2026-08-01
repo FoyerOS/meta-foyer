@@ -1,15 +1,24 @@
 [Unit]
 Description=Confirm this boot to RAUC
 Documentation=man:rauc(1)
-# Runs once the system is fully up. Until this fires, the TRY flag grub set for
-# this slot is still standing, so an unbootable update falls back to the other
-# slot on the next power cycle. This unit is what makes the rollback stop.
-After=multi-user.target foyer-seed-import.service
+# Runs once the system is fully up. Until this fires, the TRY flag grub (or,
+# on the Pi, the boot script's BOOT_x_LEFT counter) set for this slot is
+# still standing, so an unbootable update falls back to the other slot on
+# the next power cycle. This unit is what makes the rollback stop.
+After=multi-user.target foyer-seed-import.service efi.mount
+RequiresMountsFor=/efi
 ConditionKernelCommandLine=rauc.slot
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Fails loudly instead of silently marking a boot good against the wrong
+# bootloader state: on the Pi, fw_printenv reading garbage (wrong file, wrong
+# size, /efi not mounted) can *succeed* against bytes that don't mean what
+# RAUC thinks they mean — `rauc status` would then report healthy while the
+# attempt counter never resets, a silent rollback loop the boot script alone
+# cannot detect. A no-op on grub machines, which have no fw_printenv.
+ExecStartPre=/usr/libexec/foyer/foyer-boot-env-check
 ExecStart=/usr/bin/rauc status mark-good
 
 [Install]

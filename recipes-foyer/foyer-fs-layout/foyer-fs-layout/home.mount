@@ -1,0 +1,30 @@
+[Unit]
+Description=Persistent /home on the Foyer data partition
+Documentation=man:systemd.mount(5)
+# See var-lib-containers.mount: without DefaultDependencies=no the implicit
+# Before=local-fs.target closes an ordering cycle through
+# systemd-tmpfiles-setup.service and systemd deletes this unit's start job.
+DefaultDependencies=no
+Requires=data.mount
+After=data.mount
+Requires=systemd-tmpfiles-setup.service
+After=systemd-tmpfiles-setup.service
+RequiresMountsFor=/data
+Conflicts=umount.target
+Before=umount.target
+
+[Mount]
+# /home/admin is baked into the rootfs by useradd -m at build time (with its
+# /etc/skel content), but the rootfs is read-only and gets replaced whole on
+# every A/B update — this bind mount is what makes the account's dotfiles,
+# shell history and any cloud-init-injected authorized_keys survive both. The
+# baked-in skeleton is intentionally left inaccessible once this is mounted;
+# foyer.conf's tmpfiles entry creates an empty, correctly-owned home for
+# admin on the data partition instead.
+What=/data/home
+Where=/home
+Type=none
+Options=bind
+
+[Install]
+WantedBy=multi-user.target

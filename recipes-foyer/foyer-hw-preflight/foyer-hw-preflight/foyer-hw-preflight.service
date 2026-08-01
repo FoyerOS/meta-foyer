@@ -1,0 +1,14 @@
+[Unit]
+Description=Foyer hardware preflight (RAM floor)
+Documentation=man:proc(5)
+# Ordered like foyer-boot-confirm: after the system is otherwise up, before
+# anything that depends on it (see the app quadlets' Requires=/After=).
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/foyer/foyer-hw-preflight @@FOYER_MIN_MEMTOTAL_KB@@
+
+[Install]
+WantedBy=multi-user.target

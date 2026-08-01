@@ -4,8 +4,9 @@
 #
 # This cannot be a plain .mount unit: a mount unit's name is fixed by its mount
 # point, but the device behind /usr/share/foyer/seed differs per slot (seedA or
-# seedB). grub puts rauc.slot=<A|B> on the kernel command line; that is the
-# same value RAUC itself uses to identify the booted slot.
+# seedB). The bootloader (grub on EFI machines, U-Boot's boot.scr on the Pi)
+# puts rauc.slot=<A|B> on the kernel command line; that is the same value
+# RAUC itself uses to identify the booted slot.
 
 set -u
 

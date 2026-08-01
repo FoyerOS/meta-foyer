@@ -5,7 +5,6 @@ LICENSE = "MIT"
 inherit systemd
 inherit cargo_bin
 inherit pkgconfig
-inherit useradd
 
 SRC_URI = "git://git@github.com/FoyerOS/foyer-concierge.git;protocol=ssh;branch=main;"
 SRC_URI += "file://concierge.toml"
@@ -41,10 +40,11 @@ do_compile:prepend() {
 
 CARGO_FEATURES = "webgui"
 
-# The daemon rejects logins from users outside this group, and errors out if the
-# group is missing entirely. Membership is left to the operator.
-USERADD_PACKAGES = "${PN}"
-GROUPADD_PARAM:${PN} = "-r foyer-admin"
+# The daemon rejects logins from users outside this group, and errors out if
+# the group is missing entirely. The group (and the admin account that is a
+# member of it) is created by foyer-base-users, not here — two recipes
+# creating the same system group is an ordering hazard.
+RDEPENDS:${PN} += "foyer-base-users"
 
 # The unit and PAM service ship in the upstream repo, so they stay in step with
 # the binary; this layer only packages them.

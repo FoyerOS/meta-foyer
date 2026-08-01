@@ -10,12 +10,14 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 SRC_URI = "\
     file://data.mount \
     file://efi.mount \
+    file://home.mount \
     file://var-lib-containers.mount \
     file://var-lib-homeassistant.mount \
     file://var-lib-foyer.mount \
     file://var-lib-affine.mount \
     file://var-lib-postgres.mount \
     file://var-lib-redis.mount \
+    file://var-lib-cloud.mount \
     file://foyer-grow-data.service \
     file://foyer-grow-data \
     file://foyer.conf \
@@ -46,12 +48,14 @@ do_install() {
     install -d ${D}${systemd_system_unitdir}
     install -m 0644 ${UNPACKDIR}/data.mount                  ${D}${systemd_system_unitdir}/data.mount
     install -m 0644 ${UNPACKDIR}/efi.mount                   ${D}${systemd_system_unitdir}/efi.mount
+    install -m 0644 ${UNPACKDIR}/home.mount                  ${D}${systemd_system_unitdir}/home.mount
     install -m 0644 ${UNPACKDIR}/var-lib-containers.mount    ${D}${systemd_system_unitdir}/var-lib-containers.mount
     install -m 0644 ${UNPACKDIR}/var-lib-homeassistant.mount ${D}${systemd_system_unitdir}/var-lib-homeassistant.mount
     install -m 0644 ${UNPACKDIR}/var-lib-foyer.mount         ${D}${systemd_system_unitdir}/var-lib-foyer.mount
     install -m 0644 ${UNPACKDIR}/var-lib-affine.mount        ${D}${systemd_system_unitdir}/var-lib-affine.mount
     install -m 0644 ${UNPACKDIR}/var-lib-postgres.mount      ${D}${systemd_system_unitdir}/var-lib-postgres.mount
     install -m 0644 ${UNPACKDIR}/var-lib-redis.mount         ${D}${systemd_system_unitdir}/var-lib-redis.mount
+    install -m 0644 ${UNPACKDIR}/var-lib-cloud.mount         ${D}${systemd_system_unitdir}/var-lib-cloud.mount
     install -m 0644 ${UNPACKDIR}/foyer-grow-data.service     ${D}${systemd_system_unitdir}/foyer-grow-data.service
 
     install -d ${D}${libexecdir}/foyer
@@ -70,6 +74,7 @@ do_install() {
     install -d ${D}${localstatedir}/lib/affine
     install -d ${D}${localstatedir}/lib/postgres
     install -d ${D}${localstatedir}/lib/redis
+    install -d ${D}${localstatedir}/lib/cloud
 }
 
 FILES:${PN} += "\
@@ -84,6 +89,7 @@ FILES:${PN} += "\
     ${localstatedir}/lib/affine \
     ${localstatedir}/lib/postgres \
     ${localstatedir}/lib/redis \
+    ${localstatedir}/lib/cloud \
     "
 
 # foyer-grow-data.service is deliberately absent: it has no [Install] section
@@ -92,11 +98,13 @@ FILES:${PN} += "\
 SYSTEMD_SERVICE:${PN} = "\
     data.mount \
     efi.mount \
+    home.mount \
     var-lib-containers.mount \
     var-lib-homeassistant.mount \
     var-lib-foyer.mount \
     var-lib-affine.mount \
     var-lib-postgres.mount \
     var-lib-redis.mount \
+    var-lib-cloud.mount \
     "
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"

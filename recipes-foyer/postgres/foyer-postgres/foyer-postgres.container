@@ -1,7 +1,7 @@
 [Unit]
 Description=Shared PostgreSQL for Foyer app containers
-After=foyer-seed-import.service
-Requires=foyer-seed-import.service
+After=foyer-seed-import.service foyer-hw-preflight.service
+Requires=foyer-seed-import.service foyer-hw-preflight.service
 # /var/lib/postgres is a bind mount from the data partition, and
 # /var/lib/foyer is where the generated superuser password lives; starting
 # before either lands would either lose data across a reboot or fail to find

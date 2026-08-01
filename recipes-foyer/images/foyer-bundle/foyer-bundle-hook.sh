@@ -10,11 +10,15 @@
 # things in this design look slots up by filesystem label and all of them break
 # silently without this hook:
 #
-#   * grub's `search --no-floppy --label --set=root rootB`, which then leaves
-#     $root pointing at the wrong device, so `linux /boot/bzImage` fails and the
-#     bootloader drops to its menu instead of booting the update;
-#   * foyer-seed-mount's `blkid -L seed<slot>`;
-#   * anything else keyed on the labels documented in files/wic/foyer.wks.in.
+#   * on EFI machines, grub's `search --no-floppy --label --set=root rootB`,
+#     which then leaves $root pointing at the wrong device, so
+#     `linux /boot/<kernel>` fails and the bootloader drops to its menu
+#     instead of booting the update. The Pi's boot script instead uses fixed
+#     GPT partition numbers (rootA is always partition 2, rootB always 3 —
+#     see files/wic/foyer-partitions.wks.inc), so it does not depend on this
+#     label at all; e2label is still required there because...
+#   * foyer-seed-mount's `blkid -L seed<slot>`, on every machine;
+#   * anything else keyed on the labels documented in files/wic/foyer-partitions.wks.inc.
 #
 # The GPT partition names are untouched by the write, so they stay correct; it
 # is only the filesystem labels that need restoring.
