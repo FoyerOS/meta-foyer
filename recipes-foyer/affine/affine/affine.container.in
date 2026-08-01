@@ -1,7 +1,7 @@
 [Unit]
 Description=AFFiNE
-After=affine-migration.service foyer-redis.service
-Requires=affine-migration.service foyer-redis.service
+After=affine-migration.service foyer-redis.service foyer-hw-preflight.service
+Requires=affine-migration.service foyer-redis.service foyer-hw-preflight.service
 # /var/lib/affine is a bind mount from the data partition, and
 # /var/lib/foyer/secrets/pg-affine.env is written by foyer-pg-provision;
 # starting before either lands would give the container an empty storage

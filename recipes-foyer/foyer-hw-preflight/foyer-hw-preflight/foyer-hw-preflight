@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# Refuse to let the application stack start on hardware Foyer doesn't
+# support — currently just a RAM floor (FOYER_MIN_MEMTOTAL_KB, baked in at
+# build time by foyer-hw-preflight.service's ExecStart). RAM is a runtime
+# property (a 4GB Pi 5 and an 8GB one report the same Compatible= string),
+# so this has to be checked on the booted system, not at build time.
+#
+# Deliberately fails rather than halts: concierge, haproxy and sshd are not
+# gated on this unit, so an unsupported board stays reachable and
+# diagnosable instead of thrashing the app stack into OOM.
+
+set -eu
+
+min_kb="$1"
+
+if [ "$min_kb" -eq 0 ]; then
+    echo "foyer-hw-preflight: no RAM floor configured, skipping"
+    exit 0
+fi
+
+mem_kb=$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)
+
+if [ "$mem_kb" -lt "$min_kb" ]; then
+    echo "foyer-hw-preflight: MemTotal ${mem_kb}kB is below the ${min_kb}kB floor for this board — refusing to start the application stack"
+    exit 1
+fi
+
+echo "foyer-hw-preflight: MemTotal ${mem_kb}kB, floor ${min_kb}kB — OK"

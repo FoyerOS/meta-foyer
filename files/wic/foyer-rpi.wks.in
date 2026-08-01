@@ -1,0 +1,22 @@
+# Foyer OS disk layout for the Raspberry Pi machines (foyer-rpi4, foyer-rpi5)
+# — same GPT table as the EFI machines from partition 2 on, via
+# foyer-partitions.wks.inc; only partition 1 differs, since there is no EFI
+# System Partition here — the Pi's own firmware reads u-boot.bin, boot.scr and
+# the DTBs straight off a FAT partition instead.
+#
+#   1 esp           vfat   RPi firmware + u-boot + boot.scr + uboot.env  (not A/B)
+#   2-7             see files/wic/foyer-partitions.wks.inc
+#
+# No --configfile on this bootloader line: U-Boot's boot.scr is deployed by
+# rpi-u-boot-scr (see recipes-bsp/rpi-u-boot-scr) and picked up via
+# RPI_EXTRA_IMAGE_BOOT_FILES, not through wic's bootloader plugin.
+#
+# NOTE: one directive per line, no backslash continuations — wic's kickstart
+# parser runs shlex.split() on each line individually and a trailing backslash
+# raises "No escaped character".
+
+bootloader --ptable gpt --timeout=3
+
+part /boot --source bootimg_partition --fstype=vfat --label esp --part-name esp --part-type C12A7328-F81F-11D2-BA4B-00A0C93EC93B --active --align 1024 --fixed-size ${FOYER_ESP_SIZE} --mkfs-extraopts="-F 32" --no-fstab-update
+
+include ${FOYER_LAYERDIR}/files/wic/foyer-partitions.wks.inc

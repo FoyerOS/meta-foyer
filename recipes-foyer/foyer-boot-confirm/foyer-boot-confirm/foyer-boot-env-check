@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Sanity-check that the bootloader environment is actually readable before
+# foyer-boot-confirm.service marks the boot good. On U-Boot (Pi) machines,
+# fw_printenv can succeed against the wrong file, wrong size or an
+# unmounted /efi and still exit 0 with garbage output — `rauc status
+# mark-good` would then report healthy while the attempt counter behind it
+# never resets, a silent rollback loop nothing else would catch. grub
+# machines have no fw_printenv at all, so this is a no-op there.
+
+set -e
+
+if command -v fw_printenv >/dev/null 2>&1; then
+    fw_printenv BOOT_ORDER >/dev/null
+fi

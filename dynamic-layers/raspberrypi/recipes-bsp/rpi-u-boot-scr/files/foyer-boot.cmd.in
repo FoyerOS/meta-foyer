@@ -1,0 +1,64 @@
+# Foyer's A/B boot selection for U-Boot, the Pi counterpart of
+# files/wic/foyer-grub.cfg.in. Implements RAUC's uboot convention
+# (BOOT_ORDER, BOOT_A_LEFT/BOOT_B_LEFT): RAUC reorders BOOT_ORDER on install
+# and resets both counters on mark-good; decrementing on each attempt is this
+# script's job, exactly as grub decrements A_TRY/B_TRY on x86.
+#
+# @@KERNEL_IMAGETYPE@@, @@KERNEL_BOOTCMD@@ and @@BOOT_MEDIA@@ are substituted
+# by rpi-u-boot-scr's do_compile (upstream convention); @@FOYER_BOOTARGS_EXTRA@@
+# is substituted the same way for our own addition.
+#
+# The counters are hexadecimal: RAUC's uboot.c writes BOOT_x_LEFT with %x and
+# reads it back with strtoull(base 16), while u-boot's `test -gt` parses base
+# 0. Below 10 the spellings coincide, so this only stays correct as long as
+# RAUC's boot-attempts / boot-attempts-primary (see the rpi5/rpi4 system.conf)
+# stay single-digit.
+
+setenv foyer_envsize 0x4000
+setenv foyer_envaddr ${ramdisk_addr_r}
+if test -z "${devtype}"; then setenv devtype @@BOOT_MEDIA@@; fi
+if test -z "${devnum}"; then setenv devnum 0; fi
+
+if fatload ${devtype} ${devnum}:1 ${foyer_envaddr} uboot.env; then
+    env import -c ${foyer_envaddr} ${foyer_envsize}
+fi
+if test -z "${BOOT_ORDER}";  then setenv BOOT_ORDER "A B"; fi
+if test -z "${BOOT_A_LEFT}"; then setenv BOOT_A_LEFT 3;    fi
+if test -z "${BOOT_B_LEFT}"; then setenv BOOT_B_LEFT 0;    fi
+
+setenv foyer_slot
+for slot in ${BOOT_ORDER}; do
+    # classic hush (u-boot's shell) has no `break`; guard on foyer_slot
+    # being unset instead, so once a slot is picked the rest of the loop
+    # body becomes a no-op for the remaining iterations.
+    if test -z "${foyer_slot}"; then
+        if test "${slot}" = "A"; then if test ${BOOT_A_LEFT} -gt 0; then
+            setexpr BOOT_A_LEFT ${BOOT_A_LEFT} - 1; setenv foyer_slot A; setenv foyer_rootpart 2; fi; fi
+        if test "${slot}" = "B"; then if test ${BOOT_B_LEFT} -gt 0; then
+            setexpr BOOT_B_LEFT ${BOOT_B_LEFT} - 1; setenv foyer_slot B; setenv foyer_rootpart 3; fi; fi
+    fi
+done
+if test -z "${foyer_slot}"; then
+    # Both slots exhausted (or neither ever marked good): same fallback
+    # policy as foyer-grub.cfg.in — reset both counters and fall back to A.
+    setenv BOOT_ORDER "A B"; setenv BOOT_A_LEFT 2; setenv BOOT_B_LEFT 3
+    setenv foyer_slot A; setenv foyer_rootpart 2
+fi
+
+env export -c -s ${foyer_envsize} ${foyer_envaddr} BOOT_ORDER BOOT_A_LEFT BOOT_B_LEFT
+fatwrite ${devtype} ${devnum}:1 ${foyer_envaddr} uboot.env ${foyer_envsize}
+
+# root=PARTLABEL, not LABEL: same reason as x86 — the kernel cannot resolve
+# a filesystem LABEL= without an initramfs, but understands GPT PARTLABEL=.
+setenv bootargs "root=PARTLABEL=root${foyer_slot} rauc.slot=${foyer_slot} ro rootwait @@FOYER_BOOTARGS_EXTRA@@"
+
+# The kernel lives inside the root slot we just picked, not on the boot
+# partition, so it is A/B-versioned exactly like bzImage is on x86.
+ext4load ${devtype} ${devnum}:${foyer_rootpart} ${kernel_addr_r} /boot/@@KERNEL_IMAGETYPE@@
+
+# ${fdt_addr}, not a DTB loaded from the rootfs: this is the blob the Pi
+# firmware already assembled from config.txt with its own fixups applied —
+# real memory size, board revision, MAC, PCIe/USB power. A pristine dtb off
+# the rootfs would be A/B-versioned but would leave an 8 GB Pi 5 running on
+# the dtb's placeholder RAM size.
+@@KERNEL_BOOTCMD@@ ${kernel_addr_r} - ${fdt_addr}

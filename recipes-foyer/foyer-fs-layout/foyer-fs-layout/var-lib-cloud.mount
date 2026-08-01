@@ -1,0 +1,28 @@
+[Unit]
+Description=cloud-init state on the Foyer data partition
+Documentation=man:systemd.mount(5)
+# See var-lib-containers.mount: without DefaultDependencies=no the implicit
+# Before=local-fs.target closes an ordering cycle through
+# systemd-tmpfiles-setup.service and systemd deletes this unit's start job.
+DefaultDependencies=no
+Requires=data.mount
+After=data.mount
+Requires=systemd-tmpfiles-setup.service
+After=systemd-tmpfiles-setup.service
+RequiresMountsFor=/data
+Conflicts=umount.target
+Before=umount.target
+# cloud-init's own units run early in boot (before cloud-init.target); this
+# has to be up before any of them touch /var/lib/cloud, or cloud-init falls
+# back to writing into the read-only rootfs and silently loses its
+# per-instance state across reboots.
+Before=cloud-init-local.service
+
+[Mount]
+What=/data/cloud
+Where=/var/lib/cloud
+Type=none
+Options=bind
+
+[Install]
+WantedBy=multi-user.target

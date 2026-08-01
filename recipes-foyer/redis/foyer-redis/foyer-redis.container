@@ -1,7 +1,7 @@
 [Unit]
 Description=Shared Redis for Foyer app containers
-After=foyer-seed-import.service
-Requires=foyer-seed-import.service
+After=foyer-seed-import.service foyer-hw-preflight.service
+Requires=foyer-seed-import.service foyer-hw-preflight.service
 # /var/lib/redis is a bind mount from the data partition; starting before it
 # lands would give the container an empty, unpersisted data dir.
 RequiresMountsFor=/var/lib/redis

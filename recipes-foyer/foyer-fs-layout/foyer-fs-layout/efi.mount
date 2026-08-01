@@ -7,9 +7,11 @@ Before=local-fs.target
 
 [Mount]
 # Mounted at /efi rather than /boot on purpose: each root slot carries its own
-# /boot/bzImage, and mounting the ESP over /boot would hide the kernel grub
-# just loaded. RAUC writes its slot state to /efi/EFI/BOOT/grubenv, so this
-# has to be writable.
+# /boot/<kernel>, and mounting the ESP over /boot would hide the kernel that
+# was just booted. RAUC writes its slot state to /efi/EFI/BOOT/grubenv (or,
+# on the Pi — where this is the FAT boot partition, not a real EFI System
+# Partition, but still mounted here by the same generic unit — /efi/uboot.env),
+# so this has to be writable.
 # By GPT partition name, not filesystem label: this is the one vfat partition
 # in the layout, and mkfs.fat warns that lowercase FAT labels "might not work
 # properly on some systems" (FAT labels are 11 chars, uppercase-normalised on
