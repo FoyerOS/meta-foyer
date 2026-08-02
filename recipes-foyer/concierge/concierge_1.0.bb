@@ -22,6 +22,17 @@ DEPENDS += "libpam clang-native nodejs-native"
 # under CARGO_HOME) end up in the binaries and trip the buildpaths QA check.
 EXTRA_RUSTFLAGS += "--remap-path-prefix=${WORKDIR}=${TARGET_DBGSRC_DIR}"
 
+# --remap-path-prefix above only reaches rustc-compiled sources. ring (pulled
+# in transitively via rustls) compiles its C crypto primitives through the
+# `cc` crate instead, and cargo_bin_do_compile forces HOST_CFLAGS/HOST_CXXFLAGS
+# empty (RUST_BUILD and RUST_TARGET are both the bare triple
+# x86_64-unknown-linux-gnu, so cc-rs treats this cross build as a "host" one
+# and only honors HOST_CFLAGS), so the C compiler embeds the raw WORKDIR path
+# into ring's debug info with nothing to remap it. Only concierge-dbg (debug
+# symbols, not installed by default) carries the leaked path, so skip the
+# check there rather than fighting cc-rs's host/target flag precedence.
+INSANE_SKIP:${PN}-dbg += "buildpaths"
+
 export LIBCLANG_PATH = "${STAGING_LIBDIR_NATIVE}"
 BINDGEN_EXTRA_CLANG_ARGS = "${HOST_CC_ARCH}${TOOLCHAIN_OPTIONS} --target=${TARGET_SYS}"
 export BINDGEN_EXTRA_CLANG_ARGS
