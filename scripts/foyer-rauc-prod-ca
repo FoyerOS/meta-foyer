@@ -1,0 +1,194 @@
+#!/bin/sh
+#
+# Generate (or rotate) a production CA for signing Foyer RAUC bundles.
+#
+# Unlike foyer-rauc-dev-ca, this is a two-tier PKI, matching RAUC upstream's
+# own recommended "Simple CA" structure (see docs/advanced.rst in the rauc
+# source, section "Security"):
+#
+#   root.key.pem / ca.cert.pem      self-signed root CA. ca.cert.pem is the
+#                                    only thing baked into images as the
+#                                    trust anchor. root.key.pem is only ever
+#                                    needed again to issue or rotate a
+#                                    signing cert -- put it offline once this
+#                                    script is done.
+#
+#   signing.key.pem/signing.cert.pem  issued by the root, does the actual
+#                                      day-to-day bundle signing. If this key
+#                                      is ever lost or compromised, re-run
+#                                      this script with --rotate-signing:
+#                                      no device needs to be touched, since
+#                                      every device's keyring only trusts the
+#                                      root, which does not change.
+#
+# Both private keys are passphrase-encrypted (openssl -aes256), unlike the
+# dev CA's -nodes key. RAUC prompts for the passphrase interactively, or
+# reads it from the RAUC_KEY_PASSPHRASE environment variable for
+# non-interactive builds -- see docs/RAUC.md.
+#
+# No key material is committed to meta-foyer, and this script does not
+# default its output directory the way foyer-rauc-dev-ca defaults into
+# $BUILDDIR: a production root key must not live somewhere ordinarily
+# treated as regenerable. Pick a durable location outside any build tree,
+# and back up the whole directory somewhere durable and offline once done.
+#
+# Usage:
+#   foyer-rauc-prod-ca <output-dir>                  # first run: root + signing
+#   foyer-rauc-prod-ca --rotate-signing <output-dir>  # reissue signing cert only
+#
+# Point FOYER_RAUC_PKI_DIR at <output-dir> in conf/local.conf (or the
+# environment) so rauc-conf.bbappend and foyer-bundle.bb pick the keys up.
+
+set -eu
+
+ROOT_DAYS="${FOYER_ROOT_CA_DAYS:-7300}"
+SIGNING_DAYS="${FOYER_SIGNING_CERT_DAYS:-1825}"
+
+usage() {
+    echo "usage: foyer-rauc-prod-ca <output-dir>" >&2
+    echo "       foyer-rauc-prod-ca --rotate-signing <output-dir>" >&2
+    exit 1
+}
+
+MODE="create"
+case "${1:-}" in
+    --rotate-signing)
+        MODE="rotate"
+        shift
+        ;;
+    -*)
+        usage
+        ;;
+esac
+
+PKI_DIR="${1:-}"
+[ -n "$PKI_DIR" ] || usage
+
+generate_signing_cert() {
+    # Requires $PKI_DIR/ca.cert.pem and $PKI_DIR/root.key.pem to exist.
+    # Writes $PKI_DIR/signing.key.pem and $PKI_DIR/signing.cert.pem.
+    CN="Foyer OS Signing $(date +%Y-%m-%d)"
+    CSR="$PKI_DIR/signing.csr.pem"
+    EXTFILE=$(mktemp)
+    trap 'rm -f "$EXTFILE" "$CSR"' EXIT
+
+    cat > "$EXTFILE" <<EOF
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature
+extendedKeyUsage=critical,codeSigning
+EOF
+
+    echo "foyer-rauc-prod-ca: generating signing key (enter a new passphrase for it)"
+    openssl genrsa -aes256 -out "$PKI_DIR/signing.key.pem.new" 4096
+    chmod 0600 "$PKI_DIR/signing.key.pem.new"
+
+    echo "foyer-rauc-prod-ca: creating signing CSR (enter the signing key's passphrase)"
+    openssl req -new -key "$PKI_DIR/signing.key.pem.new" -out "$CSR" \
+        -subj "/O=Foyer OS/CN=$CN"
+
+    echo "foyer-rauc-prod-ca: signing it with the root CA (enter the root key's passphrase)"
+    openssl x509 -req -in "$CSR" \
+        -CA "$PKI_DIR/ca.cert.pem" -CAkey "$PKI_DIR/root.key.pem" \
+        -CAcreateserial -CAserial "$PKI_DIR/ca.srl" \
+        -days "$SIGNING_DAYS" -out "$PKI_DIR/signing.cert.pem.new" \
+        -extfile "$EXTFILE"
+    chmod 0644 "$PKI_DIR/signing.cert.pem.new"
+
+    rm -f "$EXTFILE" "$CSR"
+    trap - EXIT
+
+    mv "$PKI_DIR/signing.key.pem.new" "$PKI_DIR/signing.key.pem"
+    mv "$PKI_DIR/signing.cert.pem.new" "$PKI_DIR/signing.cert.pem"
+}
+
+if [ "$MODE" = "rotate" ]; then
+    if [ ! -e "$PKI_DIR/ca.cert.pem" ] || [ ! -e "$PKI_DIR/root.key.pem" ]; then
+        echo "foyer-rauc-prod-ca: no root CA at $PKI_DIR (expected ca.cert.pem and root.key.pem)." >&2
+        echo "Run 'foyer-rauc-prod-ca $PKI_DIR' first to create one." >&2
+        exit 1
+    fi
+
+    DATE=$(date +%Y%m%d%H%M%S)
+    if [ -e "$PKI_DIR/signing.cert.pem" ]; then
+        echo "foyer-rauc-prod-ca: archiving previous signing cert/key (still valid for bundles already signed with them)"
+        mv "$PKI_DIR/signing.cert.pem" "$PKI_DIR/signing.cert.pem.replaced-$DATE"
+        [ -e "$PKI_DIR/signing.key.pem" ] && mv "$PKI_DIR/signing.key.pem" "$PKI_DIR/signing.key.pem.replaced-$DATE"
+    fi
+
+    generate_signing_cert
+
+    cat <<EOF
+
+Done. New signing material in $PKI_DIR:
+
+  certificate : signing.cert.pem
+  private key : signing.key.pem   (keep out of git; signs bundles)
+
+The root CA was not touched. Rebuild bundles to sign them with the new key:
+
+  kas shell kas/base.yml -c "bitbake -c cleansstate foyer-bundle && bitbake foyer-bundle"
+
+Devices already in the field need no changes: their keyring only trusts the
+root CA (ca.cert.pem), which is unchanged.
+EOF
+    exit 0
+fi
+
+# MODE = create
+if [ -e "$PKI_DIR/ca.cert.pem" ]; then
+    echo "foyer-rauc-prod-ca: $PKI_DIR/ca.cert.pem already exists, refusing to overwrite." >&2
+    echo "Use 'foyer-rauc-prod-ca --rotate-signing $PKI_DIR' to reissue just the signing cert," >&2
+    echo "or delete the directory first if you really want a new root -- note that devices" >&2
+    echo "running an image built with the old root will reject bundles signed under the new one." >&2
+    exit 1
+fi
+
+mkdir -p "$PKI_DIR"
+chmod 0700 "$PKI_DIR"
+
+echo "foyer-rauc-prod-ca: generating a production root CA in $PKI_DIR"
+
+echo "foyer-rauc-prod-ca: generating root key (enter a new passphrase for it -- this is the most sensitive file in this directory)"
+openssl genrsa -aes256 -out "$PKI_DIR/root.key.pem" 4096
+chmod 0600 "$PKI_DIR/root.key.pem"
+
+echo "foyer-rauc-prod-ca: self-signing the root certificate (enter the root key's passphrase)"
+openssl req -new -x509 -key "$PKI_DIR/root.key.pem" \
+    -days "$ROOT_DAYS" -out "$PKI_DIR/ca.cert.pem" \
+    -subj "/O=Foyer OS/CN=Foyer OS Root CA" \
+    -addext "basicConstraints=critical,CA:TRUE" \
+    -addext "keyUsage=critical,keyCertSign,cRLSign"
+chmod 0644 "$PKI_DIR/ca.cert.pem"
+
+generate_signing_cert
+
+cat <<EOF
+
+Done.
+
+  root certificate : $PKI_DIR/ca.cert.pem     (baked into images as /usr/lib/rauc/ca.cert.pem)
+  root private key : $PKI_DIR/root.key.pem    (only needed to issue/rotate a signing cert -- move it offline now)
+  signing certificate : $PKI_DIR/signing.cert.pem
+  signing private key : $PKI_DIR/signing.key.pem   (signs bundles day-to-day; keep out of git)
+
+Rebuild the image so the root certificate lands in the keyring:
+
+  kas build kas/base.yml
+
+Then build a signable bundle:
+
+  kas shell kas/base.yml -c "bitbake foyer-bundle"
+
+This will prompt for the signing key's passphrase. For non-interactive
+builds, set RAUC_KEY_PASSPHRASE in the environment instead (visible to other
+processes on this host while set -- see docs/RAUC.md).
+
+If your build directory is not the default, point the build at this
+directory by setting FOYER_RAUC_PKI_DIR in conf/local.conf:
+
+  FOYER_RAUC_PKI_DIR = "$PKI_DIR"
+
+Back up this whole directory somewhere durable and offline (a password
+manager, an encrypted volume kept disconnected, ...). It is not committed to
+git and nothing else has a copy.
+EOF

@@ -83,6 +83,11 @@ foyer-bundle.bb signs with the key. Point FOYER_RAUC_PKI_DIR elsewhere in
 conf/local.conf if you keep the keys somewhere else. Use a real PKI, not this
 CA, for anything you actually deploy.
 
+For real devices, use scripts/foyer-rauc-prod-ca instead: a root CA (kept
+offline) that only ever signs a separate signing cert, so the signing key can
+be rotated without re-flashing anything already deployed. See docs/RAUC.md
+for the full setup and rotation story.
+
 Building and installing an update
 ---------------------------------
 
