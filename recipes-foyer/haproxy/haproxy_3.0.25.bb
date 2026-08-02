@@ -13,10 +13,11 @@ SRC_URI[sha256sum] = "0e4fbd90826368297ce4d5374596dd1eff58f3ec00c27312a86e455e4f
 
 inherit systemd useradd
 
-DEPENDS = ""
-# No TLS/PCRE/Lua: haproxy only fronts concierge's plain-HTTP API for now.
-# Add PACKAGECONFIG[ssl] = "USE_OPENSSL=1,,openssl" if TLS termination here
-# becomes a requirement later.
+# TLS termination for concierge's `tls enable`/`disable`/`set-ca` (see
+# foyer-concierge's daemon/services/tls.rs, which rewrites haproxy.cfg to
+# add a `bind *:443 ssl crt ...` frontend). No PCRE/Lua: nothing here needs
+# regex-based ACLs or scripting.
+DEPENDS = "openssl"
 
 # In 3.0.x the Makefile's CPU=/ARCH= variables are deprecated no-ops; only
 # TARGET= still matters. CC/CFLAGS/LDFLAGS must be passed as explicit make
@@ -28,8 +29,13 @@ DEPENDS = ""
 # diagnostics. -fdebug-prefix-map doesn't touch it since it's a plain string
 # literal, not debug info, so it trips the buildpaths QA check; blank it since
 # nothing depends on that diagnostic string being populated.
+#
+# USE_OPENSSL=1 needs no explicit SSL_INC/SSL_LIB: CC already carries
+# --sysroot=<recipe-sysroot> (see the BUILD_CC note below), and that's where
+# DEPENDS="openssl" stages headers/libs, so the default search paths resolve.
 EXTRA_OEMAKE = " \
     TARGET=linux-glibc \
+    USE_OPENSSL=1 \
     'CC=${CC}' \
     'CFLAGS=${CFLAGS}' \
     'LDFLAGS=${LDFLAGS}' \
@@ -76,8 +82,8 @@ SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 USERADD_PACKAGES = "${PN}"
 USERADD_PARAM:${PN} = "--system --no-create-home --shell ${base_sbindir}/nologin --user-group haproxy"
 
-# Concierge will regenerate and reload this file at runtime once it takes
-# over HAProxy routing; CONFFILES marks it operator/tool-owned so a package
-# upgrade never clobbers a live config, same semantics as concierge.toml in
+# Concierge regenerates and reloads this file at runtime (see `concierge
+# tls`); CONFFILES marks it operator/tool-owned so a package upgrade never
+# clobbers a live config, same semantics as concierge.toml in
 # concierge_1.0.bb. /etc persists across RAUC A/B updates via overlayfs-etc.
 CONFFILES:${PN} = "${sysconfdir}/haproxy/haproxy.cfg"

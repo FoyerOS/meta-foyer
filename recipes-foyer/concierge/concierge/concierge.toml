@@ -11,3 +11,9 @@ admin_group = "foyer-admin"
 
 # PAM service name; matches /etc/pam.d/foyer-concierge.
 pam_service = "foyer-concierge"
+
+# Where the HTTPS CA and leaf certificate/state are persisted (see `concierge tls`).
+tls_state_dir = "/var/lib/foyer/tls"
+
+# haproxy config file concierge regenerates when TLS is enabled/disabled.
+haproxy_config_path = "/etc/haproxy/haproxy.cfg"
