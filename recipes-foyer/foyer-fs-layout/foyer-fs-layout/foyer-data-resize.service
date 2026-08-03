@@ -1,6 +1,17 @@
 [Unit]
 Description=Grow the Foyer btrfs data pool to fill its member devices
 Documentation=man:btrfs-filesystem(8)
+# Load-bearing, not tidying -- verified the hard way by actually booting
+# this unit without it: a plain service defaults to After=sysinit.target,
+# which conflicts with Before=local-fs.target below (local-fs.target is
+# itself a dependency of sysinit.target by way of systemd-update-done.service
+# and friends). That closes an ordering cycle, and systemd resolves it by
+# deleting systemd-tmpfiles-setup.service's start job -- which silently
+# means /data's directories (foyer.conf's `d` and `h` lines) never get
+# created, and every var-lib-*.mount bind unit that Requires= it never
+# starts either. Same class of hazard var-lib-containers.mount's own
+# comment documents, just from the opposite side of local-fs.target.
+DefaultDependencies=no
 # Pulled in by data.mount's Wants= (see data.mount), not by enablement: this
 # is a helper tightly coupled to data.mount succeeding, not an independent
 # mount point, so it has no [Install] section of its own.
