@@ -20,6 +20,8 @@ SRC_URI = "\
     file://var-lib-cloud.mount \
     file://foyer-grow-data.service \
     file://foyer-grow-data \
+    file://foyer-data-resize.service \
+    file://foyer-data-resize \
     file://foyer.conf \
     "
 
@@ -27,21 +29,22 @@ S = "${UNPACKDIR}"
 
 inherit systemd
 
-# blkid/lsblk/sfdisk/partx resolve and resize the partition; e2fsck and
-# resize2fs grow the filesystem. blkid in particular is also what the
-# overlayfs-etc preinit uses before udev exists, so busybox's version is not
-# good enough. e2fsprogs-tune2fs is here for e2label, which foyer-bundle's
-# post-install hook uses to restore a slot's filesystem label after RAUC
-# overwrites it.
+# blkid/lsblk/sfdisk/partx/blockdev resolve and grow the foyer-data
+# partition; findmnt and btrfs-tools grow the btrfs filesystem on it once
+# mounted. blkid in particular is also what the overlayfs-etc preinit uses
+# before udev exists, so busybox's version is not good enough.
+# e2fsprogs-tune2fs is here for e2label, which foyer-bundle's post-install
+# hook uses to restore a slot's filesystem label after RAUC overwrites it --
+# rootA/rootB/seedA/seedB/foyer-config stay ext4.
 RDEPENDS:${PN} = "\
     util-linux-blkid \
     util-linux-lsblk \
     util-linux-sfdisk \
     util-linux-partx \
     util-linux-blockdev \
-    e2fsprogs-e2fsck \
-    e2fsprogs-resize2fs \
+    util-linux-findmnt \
     e2fsprogs-tune2fs \
+    btrfs-tools \
     "
 
 do_install() {
@@ -57,9 +60,11 @@ do_install() {
     install -m 0644 ${UNPACKDIR}/var-lib-redis.mount         ${D}${systemd_system_unitdir}/var-lib-redis.mount
     install -m 0644 ${UNPACKDIR}/var-lib-cloud.mount         ${D}${systemd_system_unitdir}/var-lib-cloud.mount
     install -m 0644 ${UNPACKDIR}/foyer-grow-data.service     ${D}${systemd_system_unitdir}/foyer-grow-data.service
+    install -m 0644 ${UNPACKDIR}/foyer-data-resize.service   ${D}${systemd_system_unitdir}/foyer-data-resize.service
 
     install -d ${D}${libexecdir}/foyer
     install -m 0755 ${UNPACKDIR}/foyer-grow-data ${D}${libexecdir}/foyer/foyer-grow-data
+    install -m 0755 ${UNPACKDIR}/foyer-data-resize ${D}${libexecdir}/foyer/foyer-data-resize
 
     install -d ${D}${nonarch_libdir}/tmpfiles.d
     install -m 0644 ${UNPACKDIR}/foyer.conf ${D}${nonarch_libdir}/tmpfiles.d/foyer.conf
@@ -79,7 +84,9 @@ do_install() {
 
 FILES:${PN} += "\
     ${systemd_system_unitdir}/foyer-grow-data.service \
+    ${systemd_system_unitdir}/foyer-data-resize.service \
     ${libexecdir}/foyer/foyer-grow-data \
+    ${libexecdir}/foyer/foyer-data-resize \
     ${nonarch_libdir}/tmpfiles.d/foyer.conf \
     /data \
     /efi \
@@ -92,9 +99,11 @@ FILES:${PN} += "\
     ${localstatedir}/lib/cloud \
     "
 
-# foyer-grow-data.service is deliberately absent: it has no [Install] section
-# (nothing should pull it in on its own) and is started via data.mount's
-# Requires=, so `systemctl enable` would have nothing to link.
+# foyer-grow-data.service and foyer-data-resize.service are deliberately
+# absent: neither has an [Install] section (nothing should pull them in on
+# their own), so `systemctl enable` would have nothing to link. Both are
+# started by data.mount's Requires=/Wants= instead, one on each side of the
+# mount.
 SYSTEMD_SERVICE:${PN} = "\
     data.mount \
     efi.mount \

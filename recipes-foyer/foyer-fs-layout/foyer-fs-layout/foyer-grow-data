@@ -1,11 +1,12 @@
 #!/bin/sh
 #
-# Expand the foyer-data partition, and the filesystem on it, to fill whatever
-# disk the image was written to. The .wic ships foyer-data at a fixed size so
-# that one image can be flashed to an 8GB SD card or a 1TB SSD; this claims the
-# remainder.
+# Expand the foyer-data partition to fill whatever disk the image was written
+# to. The .wic ships foyer-data at a fixed size so that one image can be
+# flashed to an 8GB SD card or a 1TB SSD; this claims the remainder. Growing
+# the btrfs filesystem itself happens afterwards, once /data is mounted, in
+# foyer-data-resize.service — btrfs can only resize a mounted filesystem.
 #
-# Runs before data.mount, while the filesystem is still unmounted.
+# Runs before data.mount, while the partition table is still safe to rewrite.
 #
 # Two things this script is careful about, both learned the hard way:
 #
@@ -75,14 +76,7 @@ sfdisk --relocate gpt-bak-std "$DISK" >/dev/null 2>&1 \
 # ",+" means: keep the start, extend the size over all remaining free space.
 if echo ',+' | sfdisk --no-reread --force -N "$PARTNUM" "$DISK" >/dev/null 2>&1; then
     partx -u "$DISK" >/dev/null 2>&1 || true
-
-    # resize2fs refuses to touch a filesystem that has not been checked.
-    e2fsck -fp "$DEV" >/dev/null 2>&1 || true
-    if resize2fs "$DEV" >/dev/null 2>&1; then
-        log "grown to $(blockdev --getsize64 "$DEV" 2>/dev/null || echo '?') bytes"
-    else
-        log "partition grown but resize2fs made no change"
-    fi
+    log "partition grown to $(blockdev --getsize64 "$DEV" 2>/dev/null || echo '?') bytes"
 else
     log "could not extend the partition, leaving it as it is"
 fi

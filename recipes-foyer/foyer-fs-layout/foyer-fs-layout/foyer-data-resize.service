@@ -1,0 +1,18 @@
+[Unit]
+Description=Grow the Foyer btrfs data pool to fill its member devices
+Documentation=man:btrfs-filesystem(8)
+# Pulled in by data.mount's Wants= (see data.mount), not by enablement: this
+# is a helper tightly coupled to data.mount succeeding, not an independent
+# mount point, so it has no [Install] section of its own.
+Requires=data.mount
+After=data.mount
+Before=local-fs.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/foyer/foyer-data-resize
+# Never block boot on a resize failure: an undersized pool still works, it is
+# just short on space until fixed.
+SuccessExitStatus=0

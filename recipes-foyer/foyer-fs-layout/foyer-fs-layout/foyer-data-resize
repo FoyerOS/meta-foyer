@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Grow the btrfs filesystem on /data to fill whatever its member devices
+# actually have available. foyer-grow-data.service (which runs earlier, before
+# data.mount, while the partition table is still safe to rewrite) already
+# extended the foyer-data partition itself; btrfs can only resize a *mounted*
+# filesystem, so that half of the job happens here, after data.mount.
+#
+# This also covers a pool member that is a whole disk with no partition table
+# at all -- e.g. a second virtual disk expanded in a hypervisor -- which
+# foyer-grow-data has nothing to act on.
+#
+# Idempotent: resizing a device to ":max" when it already fills its available
+# space is a fast no-op. Deliberately never fails the boot -- an undersized
+# pool is degraded, not broken.
+
+set -u
+
+log() {
+    echo "foyer-data-resize: $*"
+}
+
+FSID=$(findmnt -no UUID /data 2>/dev/null || true)
+if [ -z "$FSID" ] || [ ! -d "/sys/fs/btrfs/$FSID/devinfo" ]; then
+    log "/data is not a mounted btrfs filesystem, nothing to do"
+    exit 0
+fi
+
+for DEVDIR in "/sys/fs/btrfs/$FSID/devinfo"/*; do
+    [ -d "$DEVDIR" ] || continue
+    DEVID=$(basename "$DEVDIR")
+    if btrfs filesystem resize "${DEVID}:max" /data >/dev/null 2>&1; then
+        log "devid $DEVID resized to max"
+    else
+        log "devid $DEVID: resize made no change or failed"
+    fi
+done
+
+exit 0

@@ -1,8 +1,8 @@
 [Unit]
 Description=Foyer data partition
 Documentation=man:systemd.mount(5)
-# Grow to fill the disk before anything mounts it. Resizing the partition
-# table is only safe while the filesystem is still unmounted.
+# Grow the partition to fill the disk before anything mounts it. Resizing the
+# partition table is only safe while the filesystem is still unmounted.
 After=foyer-grow-data.service
 Requires=foyer-grow-data.service
 # Required, not optional: this is what systemd-fstab-generator emits for every
@@ -11,14 +11,24 @@ Requires=foyer-grow-data.service
 # sysinit.target (observed: mounted at 10.9s, unmounted at 12.8s alongside
 # systemd-update-done.service).
 Before=local-fs.target
+# Grow the btrfs filesystem itself to fill its member devices once mounted
+# (foyer-grow-data only ever touches the partition table). Wants=, not
+# Requires=: foyer-data-resize always exits 0, but a resize helper must never
+# be able to take /data down with it if that ever stops being true.
+# foyer-data-resize.service has no [Install] section of its own -- this is
+# what pulls it in, ordered after by its own After=data.mount.
+Wants=foyer-data-resize.service
 
 [Mount]
 # By filesystem label, never a device node: the same image runs on vda, sda,
-# nvme0n1p7 and mmcblk0p7.
+# nvme0n1p7 and mmcblk0p7. systemd's 60-persistent-storage.rules gates
+# by-label symlink creation on ENV{ID_BTRFS_READY}, so this symlink only
+# appears once every pool member has been scanned -- a missing member fails
+# this mount cleanly instead of mounting a partial pool.
 What=/dev/disk/by-label/foyer-data
 Where=/data
-Type=ext4
-Options=noatime
+Type=btrfs
+Options=noatime,compress=zstd:1
 
 [Install]
 WantedBy=local-fs.target

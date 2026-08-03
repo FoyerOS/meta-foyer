@@ -1,6 +1,6 @@
 [Unit]
 Description=Grow the Foyer data partition to fill the disk
-Documentation=man:sfdisk(8) man:resize2fs(8)
+Documentation=man:sfdisk(8)
 DefaultDependencies=no
 After=systemd-udev-trigger.service
 Before=data.mount local-fs.target shutdown.target

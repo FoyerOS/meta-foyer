@@ -10,5 +10,5 @@
 # clouds need.
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-SRC_URI:append = " file://foyer-storage.cfg file://foyer-net.cfg file://foyer-platform.cfg"
+SRC_URI:append = " file://foyer-storage.cfg file://foyer-btrfs.cfg file://foyer-net.cfg file://foyer-platform.cfg"
 SRC_URI:append:foyer-x86-64 = " file://foyer-net-x86.cfg file://foyer-platform-x86.cfg"

@@ -9,7 +9,7 @@
 #   4 seedA         ext4   container image tarballs for slot A   A/B
 #   5 seedB         ext4   container image tarballs for slot B   A/B
 #   6 foyer-config  ext4   /etc overlay upper+work      never touched by updates
-#   7 foyer-data    ext4   all runtime state            never touched by updates
+#   7 foyer-data    btrfs  all runtime state            never touched by updates
 #
 # Every partition carries the same string as both its filesystem label
 # (--label) and its GPT partition name (--part-name), because the two are read
@@ -46,4 +46,4 @@ part --fstype=ext4 --label foyer-config --part-name foyer-config --align 1024 --
 
 # Last partition on purpose: foyer-grow-data.service expands it to fill the
 # disk on first boot, so one image fits an SD card and a 1TB SSD alike.
-part --fstype=ext4 --label foyer-data --part-name foyer-data --align 1024 --fixed-size ${FOYER_DATA_SIZE} --no-fstab-update
+part --fstype=btrfs --label foyer-data --part-name foyer-data --align 1024 --fixed-size ${FOYER_DATA_SIZE} --no-fstab-update
